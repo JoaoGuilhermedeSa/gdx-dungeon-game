@@ -55,27 +55,31 @@ This project uses Gradle as a build tool.
      ./gradlew lwjgl3:run
      ```
 
-## Jar
+## Packaging
 
-To package the application into a runnable JAR file, you can use the following commands:
+To package the application, you can use the following Gradle tasks:
 
-- **Cross-platform JAR:**
+- **Create a runnable JAR:**
   ```bash
-  ./gradlew jar
+  ./gradlew lwjgl3:dist
   ```
+  This will create a JAR file in the `lwjgl3/build/libs/` directory.
 
-- **Platform-specific JARs:**
+- **Create a platform-specific distribution with an embedded JRE:**
   - **Windows:**
     ```bash
-    ./gradlew jarWin
+    ./gradlew lwjgl3:construoWinX64
     ```
   - **Linux:**
     ```bash
-    ./gradlew jarLinux
+    ./gradlew lwjgl3:construoLinuxX64
     ```
-  - **macOS:**
+  - **macOS (Intel):**
     ```bash
-    ./gradlew jarMac
+    ./gradlew lwjgl3:construoMacX64
     ```
-
-The generated JAR file can be found in the `lwjgl3/build/libs/` directory.
+  - **macOS (Apple Silicon):**
+    ```bash
+    ./gradlew lwjgl3:construoMacM1
+    ```
+  These tasks will create a distribution in the `lwjgl3/build/construo/` directory.
