@@ -13,6 +13,8 @@ import com.badlogic.gdx.scenes.scene2d.Stage
 import com.badlogic.gdx.scenes.scene2d.ui.Skin
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.ui.Label
+import com.badlogic.gdx.graphics.g2d.Animation
+import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener
 import com.badlogic.gdx.utils.viewport.ExtendViewport
@@ -37,12 +39,19 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
     private lateinit var knightTexture: Texture
     private lateinit var lavaTexture: Texture
     private lateinit var groundTexture: Texture
+    private lateinit var fireEffectTexture: Texture
+    private lateinit var healEffectTexture: Texture
+    private lateinit var fireAnimation: Animation<TextureRegion>
+    private lateinit var healAnimation: Animation<TextureRegion>
+    private val activeEffects = mutableListOf<ActiveEffect>()
     var knightPosition = Vector2(0f, 0f)
     private var path: List<Vector2> = emptyList()
     var pathIndex = 0
     private var animationTimer = 0f
     var isAnimating = false
     private var minHealth = 0
+
+    data class ActiveEffect(val animation: Animation<TextureRegion>, val position: Vector2, var stateTime: Float = 0f)
 
     override fun create() {
         batch = SpriteBatch()
@@ -63,9 +72,15 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
             knightTexture = Texture("sprites/Assassin.gif")
             lavaTexture = Texture("sprites/Lava_Tile.gif")
             groundTexture = Texture("sprites/Black_Marble_Floor.gif")
+            fireEffectTexture = Texture("sprites/fire_effect.png")
+            healEffectTexture = Texture("sprites/heal_effect.png")
         } catch (e: Exception) {
             Gdx.app.log("DungeonGame", "Texture loading error: ${e.message}")
         }
+
+        // Create animations
+        fireAnimation = createAnimation(fireEffectTexture, 10, 64, 64)
+        healAnimation = createAnimation(healEffectTexture, 7, 32, 64)
 
         // Update font scale
         font.data.setScale(0.03f, -0.03f) // Flip Y for text
@@ -119,6 +134,16 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
         Gdx.input.inputProcessor = multiplexer
     }
 
+    private fun createAnimation(texture: Texture, frameCount: Int, frameWidth: Int, frameHeight: Int): Animation<TextureRegion> {
+        val frames = TextureRegion.split(texture, frameWidth, frameHeight)[0]
+        for (frame in frames) {
+            frame.flip(false, true)
+        }
+        val animation = Animation<TextureRegion>(0.1f, *frames)
+        animation.playMode = Animation.PlayMode.NORMAL
+        return animation
+    }
+
     private fun generateNewDungeon() {
         val m = Random.nextInt(1, 201)
         val n = Random.nextInt(1, 201)
@@ -128,6 +153,7 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
         path = result.second.map { Vector2(it.second.toFloat(), it.first.toFloat()) }
         knightPosition = Vector2(0f, 0f)
         isAnimating = false
+        activeEffects.clear()
     }
 
     override fun resize(width: Int, height: Int) {
@@ -136,7 +162,7 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
         uiStage.viewport.update(width, height, true)
     }
 
-    
+
 
     override fun render() {
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f)
@@ -149,6 +175,15 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
                 knightPosition = path[pathIndex]
                 pathIndex++
                 animationTimer = 0f
+
+                val tileX = knightPosition.x.toInt()
+                val tileY = knightPosition.y.toInt()
+                if (dungeon[tileY][tileX] < 0) {
+                    activeEffects.add(ActiveEffect(fireAnimation, Vector2(tileX.toFloat(), tileY.toFloat())))
+                } else {
+                    activeEffects.add(ActiveEffect(healAnimation, Vector2(tileX.toFloat(), tileY.toFloat())))
+                }
+
                 if (pathIndex >= path.size) {
                     isAnimating = false
                 }
@@ -209,6 +244,19 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
             0, 0, knightTexture.width, knightTexture.height, // Source region (full texture)
             false, true // Flip Y to correct orientation
         )
+
+        // Draw active effects
+        val iterator = activeEffects.iterator()
+        while (iterator.hasNext()) {
+            val effect = iterator.next()
+            effect.stateTime += Gdx.graphics.deltaTime
+            if (effect.animation.isAnimationFinished(effect.stateTime)) {
+                iterator.remove()
+            } else {
+                val frame = effect.animation.getKeyFrame(effect.stateTime)
+                batch.draw(frame, effect.position.x, effect.position.y, 1f, 1f)
+            }
+        }
         batch.end()
 
         // Update and draw UI stage
@@ -225,6 +273,8 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
         knightTexture.dispose()
         lavaTexture.dispose()
         groundTexture.dispose()
+        fireEffectTexture.dispose()
+        healEffectTexture.dispose()
         skin.dispose()
         uiStage.dispose()
     }
