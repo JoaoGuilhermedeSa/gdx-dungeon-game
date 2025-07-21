@@ -1,7 +1,9 @@
+import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.InputProcessor
+import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.math.Vector2
 
-class GameInputProcessor(private val game: DungeonGame) : InputProcessor {
+class GameInputProcessor(private val game: DungeonGame, private val camera: OrthographicCamera) : InputProcessor {
 
     override fun keyDown(keycode: Int): Boolean {
         return false
@@ -34,7 +36,11 @@ class GameInputProcessor(private val game: DungeonGame) : InputProcessor {
     }
 
     override fun touchDragged(screenX: Int, screenY: Int, pointer: Int): Boolean {
-        return false
+        val dx = Gdx.input.getDeltaX(pointer).toFloat()
+        val dy = Gdx.input.getDeltaY(pointer).toFloat()
+        camera.translate(-dx * camera.zoom, dy * camera.zoom, 0f)
+        camera.update()
+        return true
     }
 
     override fun mouseMoved(screenX: Int, screenY: Int): Boolean {
@@ -42,6 +48,13 @@ class GameInputProcessor(private val game: DungeonGame) : InputProcessor {
     }
 
     override fun scrolled(amountX: Float, amountY: Float): Boolean {
-        return false
+        var zoomAmount = amountY * 0.1f;
+        if (camera.zoom + zoomAmount < 0.1f) {
+            camera.zoom = 0.1f
+        } else {
+            camera.zoom += zoomAmount
+        }
+        camera.update()
+        return true
     }
 }

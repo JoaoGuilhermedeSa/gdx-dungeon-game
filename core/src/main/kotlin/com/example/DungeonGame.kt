@@ -7,52 +7,56 @@ import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.scenes.scene2d.InputEvent
 import com.badlogic.gdx.scenes.scene2d.Stage
 import com.badlogic.gdx.scenes.scene2d.ui.Skin
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
+import com.badlogic.gdx.scenes.scene2d.ui.Label
+import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener
-import com.badlogic.gdx.utils.viewport.FitViewport
+import com.badlogic.gdx.utils.viewport.ExtendViewport
 import com.badlogic.gdx.utils.viewport.ScreenViewport
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
+import kotlin.random.nextInt
 
 class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
     private lateinit var batch: SpriteBatch
     private lateinit var font: BitmapFont
     private lateinit var uiFont: BitmapFont
-    private lateinit var shapeRenderer: ShapeRenderer
     private lateinit var camera: OrthographicCamera
-    private lateinit var viewport: FitViewport
+    private var zoom = 1.0f
+    private lateinit var viewport: ExtendViewport
     private lateinit var uiStage: Stage
     private lateinit var skin: Skin
+    private lateinit var minHealthLabel: Label
+    private lateinit var generateButton: TextButton
+    private lateinit var table: Table
     private lateinit var knightTexture: Texture
     private lateinit var lavaTexture: Texture
     private lateinit var groundTexture: Texture
-    public var knightPosition = Vector2(0f, 0f)
+    var knightPosition = Vector2(0f, 0f)
     private var path: List<Vector2> = emptyList()
-    public var pathIndex = 0
+    var pathIndex = 0
     private var animationTimer = 0f
-    public var isAnimating = false
+    var isAnimating = false
     private var minHealth = 0
-    private var fontScaleFactor = 0f
-    private var uiScaleFactor = 1f
 
     override fun create() {
         batch = SpriteBatch()
         font = BitmapFont()
         uiFont = BitmapFont()
-        shapeRenderer = ShapeRenderer()
+        uiFont.data.setScale(2f) // Larger font for UI
         camera = OrthographicCamera()
 
         // Initialize viewport with virtual dimensions based on dungeon size
         val m = dungeon.size.toFloat()
         val n = dungeon[0].size.toFloat()
-        viewport = FitViewport(n, m + 1f, camera) // +1 for health text space
+        viewport = ExtendViewport(n, m, camera) // +1 for health text space
         camera.setToOrtho(true) // Y-down for top-left origin
+        camera.zoom = zoom
 
         // Load textures (wrap in try-catch to log errors)
         try {
@@ -64,7 +68,8 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
         }
 
         // Update font scale
-        updateFontScale()
+        font.data.setScale(0.03f, -0.03f) // Flip Y for text
+        font.setUseIntegerPositions(false)
 
         // Calculate path and min health
         val result = calculateMinHealthAndPath(dungeon)
@@ -82,9 +87,12 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
         buttonStyle.font = uiFont
         skin.add("default", buttonStyle)
 
+        // Create min health label
+        val labelStyle = Label.LabelStyle(uiFont, Color.WHITE)
+        minHealthLabel = Label("Min Health: $minHealth", labelStyle)
+
         // Create generate button
-        val generateButton = TextButton("New Map", skin)
-        uiStage.addActor(generateButton)
+        generateButton = TextButton("New Map", skin)
 
         // Add click listener to button
         generateButton.addListener(object : ClickListener() {
@@ -94,19 +102,26 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
             }
         })
 
-        // Initial UI scale and position
-        updateUIScaleAndPosition()
+        // Set up table layout
+        table = Table()
+        table.setFillParent(true)
+        uiStage.addActor(table)
+
+        table.top().left()
+        table.add(minHealthLabel).pad(10f)
+        table.row()
+        table.add(generateButton).pad(10f)
 
         // Set input multiplexer
         val multiplexer = InputMultiplexer()
         multiplexer.addProcessor(uiStage)
-        multiplexer.addProcessor(GameInputProcessor(this))
+        multiplexer.addProcessor(GameInputProcessor(this, camera))
         Gdx.input.inputProcessor = multiplexer
     }
 
     private fun generateNewDungeon() {
-        val m = dungeon.size
-        val n = dungeon.size
+        val m = Random.nextInt(1, 201)
+        val n = Random.nextInt(1, 201)
         dungeon = Array(m) { IntArray(n) { Random.nextInt(-1000, 1001) } }
         val result = calculateMinHealthAndPath(dungeon)
         minHealth = result.first
@@ -117,62 +132,68 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
 
     override fun resize(width: Int, height: Int) {
         viewport.update(width, height, true)
+        camera.zoom = zoom
         uiStage.viewport.update(width, height, true)
-        updateFontScale()
-        updateUIScaleAndPosition()
     }
 
-    private fun updateFontScale() {
-        // Calculate scale factor based on viewport (pixels per virtual unit)
-        val scale = min(viewport.screenWidth.toFloat() / viewport.worldWidth, viewport.screenHeight.toFloat() / viewport.worldHeight)
-        fontScaleFactor = (scale / 50f) * 1.5f // Relative to original 50px cell design
-        font.data.setScale(0.03f, -0.03f) // Flip Y for text
-        font.setUseIntegerPositions(false)
-    }
-
-    private fun updateUIScaleAndPosition() {
-        uiScaleFactor = Gdx.graphics.width.toFloat() / 800f
-        uiFont.data.setScale(uiScaleFactor)
-        // Find and update the button
-        uiStage.actors.forEach { actor ->
-            if (actor is TextButton && actor.text.toString() == "New Map") {
-                actor.pack() // Recalculate size after scaling
-                actor.setPosition(viewport.screenWidth - (actor.width * uiScaleFactor), 10f * uiScaleFactor) // Scale padding too
-            }
-        }
-    }
+    
 
     override fun render() {
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
+
+        // Animation logic for knight movement
+        if (isAnimating) {
+            animationTimer += Gdx.graphics.deltaTime
+            if (animationTimer >= 0.5f && pathIndex < path.size) {
+                knightPosition = path[pathIndex]
+                pathIndex++
+                animationTimer = 0f
+                if (pathIndex >= path.size) {
+                    isAnimating = false
+                }
+            }
+        }
+
         viewport.apply()
+        camera.position.set(knightPosition.x + 0.5f, knightPosition.y + 0.5f, 0f)
         camera.update()
         batch.projectionMatrix = camera.combined
-        shapeRenderer.projectionMatrix = camera.combined
+
+        val m = dungeon.size
+        val n = dungeon[0].size
+
+        val worldWidth = viewport.worldWidth
+        val worldHeight = viewport.worldHeight
+
+        val camX = camera.position.x
+        val camY = camera.position.y
+
+        val startX = max(0, (camX - worldWidth / 2 * camera.zoom).toInt())
+        val endX = min(n - 1, (camX + worldWidth / 2 * camera.zoom).toInt())
+        val startY = max(0, (camY - worldHeight / 2 * camera.zoom).toInt())
+        val endY = min(m - 1, (camY + worldHeight / 2 * camera.zoom).toInt())
 
         // Draw dungeon grid with SpriteBatch
         batch.begin()
-        for (i in dungeon.indices) {
-            for (j in dungeon[i].indices) {
+        for (i in startY..endY) {
+            for (j in startX..endX) {
                 val x = j.toFloat()
                 val y = i.toFloat()
                 // Draw appropriate texture based on cell value
                 val texture = when {
                     dungeon[i][j] < 0 -> lavaTexture // Demons
-                    dungeon[i][j] > 0 -> groundTexture // Orbs
-                    else -> null // Empty cells will use ShapeRenderer
+                    else -> groundTexture // Orbs
                 }
-                if (texture != null) {
-                    batch.setColor(Color.WHITE)
-                    batch.draw(
-                        texture, x, y,
-                        0f, 0f, 1f, 1f, // Draw width/height = 1x1 virtual unit
-                        1f, 1f, // Scale = 1f (no additional scaling needed)
-                        0f, // No rotation
-                        0, 0, texture.width, texture.height, // Source region (full texture)
-                        false, true // Flip Y to correct orientation
-                    )
-                }
+                batch.setColor(Color.WHITE)
+                batch.draw(
+                    texture, x, y,
+                    0f, 0f, 1f, 1f, // Draw width/height = 1x1 virtual unit
+                    1f, 1f, // Scale = 1f (no additional scaling needed)
+                    0f, // No rotation
+                    0, 0, texture.width, texture.height, // Source region (full texture)
+                    false, true // Flip Y to correct orientation
+                )
                 // Draw cell value (centered in cell)
                 batch.setColor(Color.WHITE)
                 font.draw(batch, dungeon[i][j].toString(), x + 0.2f, y + 0.6f)
@@ -188,40 +209,13 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
             0, 0, knightTexture.width, knightTexture.height, // Source region (full texture)
             false, true // Flip Y to correct orientation
         )
-        // Draw minimum health
-        font.draw(batch, "Min Health: $minHealth", 0.1f, dungeon.size.toFloat())
         batch.end()
-
-        // Draw empty cells with ShapeRenderer
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
-        for (i in dungeon.indices) {
-            for (j in dungeon[i].indices) {
-                if (dungeon[i][j] == 0) { // Only for empty cells
-                    val x = j.toFloat()
-                    val y = i.toFloat()
-                    shapeRenderer.color = Color(0.5f, 0.5f, 0.5f, 0.5f) // Gray for empty
-                    shapeRenderer.rect(x, y, 1f, 1f)
-                }
-            }
-        }
-        shapeRenderer.end()
 
         // Update and draw UI stage
         uiStage.act(Gdx.graphics.deltaTime)
         uiStage.draw()
 
-        // Animation logic for knight movement
-        if (isAnimating) {
-            animationTimer += Gdx.graphics.deltaTime
-            if (animationTimer >= 0.5f && pathIndex < path.size) {
-                knightPosition = path[pathIndex]
-                pathIndex++
-                animationTimer = 0f
-                if (pathIndex >= path.size) {
-                    isAnimating = false
-                }
-            }
-        }
+        minHealthLabel.setText("Min Health: $minHealth")
     }
 
     override fun dispose() {
@@ -231,7 +225,6 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
         knightTexture.dispose()
         lavaTexture.dispose()
         groundTexture.dispose()
-        shapeRenderer.dispose()
         skin.dispose()
         uiStage.dispose()
     }
