@@ -13,6 +13,8 @@ import com.badlogic.gdx.scenes.scene2d.Stage
 import com.badlogic.gdx.scenes.scene2d.ui.Skin
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.ui.Label
+import com.badlogic.gdx.audio.Music
+import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.g2d.Animation
 import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.scenes.scene2d.ui.Table
@@ -44,6 +46,9 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
     private lateinit var fireAnimation: Animation<TextureRegion>
     private lateinit var healAnimation: Animation<TextureRegion>
     private val activeEffects = mutableListOf<ActiveEffect>()
+    private lateinit var backgroundMusic: Music
+    private lateinit var healSound: Sound
+    private lateinit var fireSound: Sound
     var knightPosition = Vector2(0f, 0f)
     private var path: List<Vector2> = emptyList()
     var pathIndex = 0
@@ -74,9 +79,19 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
             groundTexture = Texture("sprites/Black_Marble_Floor.gif")
             fireEffectTexture = Texture("sprites/fire_effect.png")
             healEffectTexture = Texture("sprites/heal_effect.png")
+
+            // Load audio
+            backgroundMusic = Gdx.audio.newMusic(Gdx.files.internal("audio/ost.mp3"))
+            healSound = Gdx.audio.newSound(Gdx.files.internal("audio/heal.mp3"))
+            fireSound = Gdx.audio.newSound(Gdx.files.internal("audio/fire.mp3"))
         } catch (e: Exception) {
-            Gdx.app.log("DungeonGame", "Texture loading error: ${e.message}")
+            Gdx.app.log("DungeonGame", "Asset loading error: ${e.message}")
         }
+
+        // Play background music
+        backgroundMusic.isLooping = true
+        backgroundMusic.volume = 50f
+        backgroundMusic.play()
 
         // Create animations
         fireAnimation = createAnimation(fireEffectTexture, 10, 64, 64)
@@ -180,8 +195,10 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
                 val tileY = knightPosition.y.toInt()
                 if (dungeon[tileY][tileX] < 0) {
                     activeEffects.add(ActiveEffect(fireAnimation, Vector2(tileX.toFloat(), tileY.toFloat())))
+                    fireSound.play()
                 } else {
                     activeEffects.add(ActiveEffect(healAnimation, Vector2(tileX.toFloat(), tileY.toFloat())))
+                    healSound.play()
                 }
 
                 if (pathIndex >= path.size) {
@@ -275,6 +292,9 @@ class DungeonGame(private var dungeon: Array<IntArray>) : ApplicationAdapter() {
         groundTexture.dispose()
         fireEffectTexture.dispose()
         healEffectTexture.dispose()
+        backgroundMusic.dispose()
+        healSound.dispose()
+        fireSound.dispose()
         skin.dispose()
         uiStage.dispose()
     }
